@@ -1,0 +1,10 @@
+# Pre-define Devices
+[[DeviceList]]
+  Name = "Matter-Simulator"
+  ProfileName = "Matter-Simulator-Device"
+  Description = "Example of Matter Simulator"
+  Labels = [ "matter-simulator" ]
+  [DeviceList.Protocols]
+    [DeviceList.Protocols.other]
+      Address = "device-matter-simulator"
+      Port = "300"

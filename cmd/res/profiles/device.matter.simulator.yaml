@@ -1,0 +1,104 @@
+name: "Matter-Simulator-Device"
+manufacturer: "Jiangxing Intelligence"
+model: "SP-01"
+labels:
+- "matter-simulator"
+description: "Example of Matter Simulator"
+
+deviceResources:
+-
+  name: "qrcode_payload"
+  isHidden: true
+  description: "the setup QR code payload of the device"
+  properties:
+    valueType: "String"
+    readWrite: "RW"
+-
+  name: "node_id"
+  isHidden: true
+  description: "the user-defined ID of the node being commissioned"
+  properties:
+    valueType: "String"
+    readWrite: "RW"
+-
+  name: "endpoint_id"
+  isHidden: true
+  description: "the ID of the endpoint with cluster implemented"
+  properties:
+    valueType: "String"
+    readWrite: "RW"
+-
+  name: "on_off_toggle"
+  isHidden: true
+  description: "off/on/toggle"
+  properties:
+    valueType: "String"
+    readWrite: "RW"
+-
+  name: "ssid"
+  isHidden: true
+  description: "WI-FI ssid"
+  properties:
+    valueType: "String"
+    readWrite: "RW"
+-
+  name: "password"
+  isHidden: true
+  description: "WI-FI password"
+  properties:
+    valueType: "String"
+    readWrite: "RW"
+-
+  name: "timeout"
+  isHidden: true
+  description: "timeout for commission"
+  properties:
+    valueType: "String"
+    readWrite: "RW"
+    units: "s"
+
+deviceCommands:
+  -
+    name: "ParseSetupPayload"
+    isHidden: false
+    readWrite: "RW"
+    resourceOperations:
+      - { deviceResource: "qrcode_payload"}
+  -
+    name: "CommissionIntoWiFiOverBT"
+    isHidden: false
+    readWrite: "RW"
+    resourceOperations:
+      - { deviceResource: "node_id"}
+      - { deviceResource: "ssid" }
+      - { deviceResource: "password" }
+      - { deviceResource: "qrcode_payload" }
+      - { deviceResource: "timeout" , defaultValue: "10"}
+  -
+    name: "CommissionWithQRCode"
+    isHidden: false
+    readWrite: "RW"
+    resourceOperations:
+      - { deviceResource: "node_id"}
+      - { deviceResource: "qrcode_payload" }
+  -
+    name: "RemoveFromFabric"
+    isHidden: false
+    readWrite: "RW"
+    resourceOperations:
+      - { deviceResource: "node_id"}
+  -
+    name: "Cluster_On_Off_Toggle"
+    isHidden: false
+    readWrite: "RW"
+    resourceOperations:
+      - { deviceResource: "node_id"}
+      - { deviceResource: "endpoint_id", defaultValue: "1"}
+      - { deviceResource: "on_off_toggle", defaultValue: "1"}
+  -
+    name: "Cluster_Read_On_Off"
+    isHidden: false
+    readWrite: "RW"
+    resourceOperations:
+      - { deviceResource: "node_id"}
+      - { deviceResource: "endpoint_id", defaultValue: "1"}

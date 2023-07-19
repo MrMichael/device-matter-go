@@ -1,0 +1,15 @@
+name: "Matter-ChipTool-Device"
+manufacturer: "Jiangxing Intelligence"
+model: "SP-01"
+labels:
+- "command-line tool"
+description: "Example of Matter ChipTool"
+
+deviceResources:
+-
+  name: "cmdParams"
+  isHidden: false
+  description: "the parameters for chip-tool(matter command-line tool) to send"
+  properties:
+    valueType: "StringArray"
+    readWrite: "RW"

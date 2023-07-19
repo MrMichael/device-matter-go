@@ -1,0 +1,10 @@
+# Pre-define Devices
+[[DeviceList]]
+  Name = "Matter-ChipTool"
+  ProfileName = "Matter-ChipTool-Device"
+  Description = "Example of Matter ChipTool"
+  Labels = [ "command-line tool" ]
+  [DeviceList.Protocols]
+    [DeviceList.Protocols.other]
+      Address = "device-matter-chiptool"
+      Port = "300"
