@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2020-2021 IOTech Ltd
+// Copyright (C) 2020-2022 IOTech Ltd
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -33,8 +33,13 @@ const (
 	ApiReadingByDeviceNameAndTimeRangeRoute                = ApiReadingByDeviceNameRoute + "/" + Start + "/{" + Start + "}/" + End + "/{" + End + "}"
 
 	ApiDeviceProfileRoute                       = ApiBase + "/deviceprofile"
+	ApiDeviceProfileBasicInfoRoute              = ApiDeviceProfileRoute + "/basicinfo"
+	ApiDeviceProfileDeviceCommandRoute          = ApiDeviceProfileRoute + "/" + DeviceCommand
+	ApiDeviceProfileResourceRoute               = ApiDeviceProfileRoute + "/" + Resource
 	ApiDeviceProfileUploadFileRoute             = ApiDeviceProfileRoute + "/uploadfile"
 	ApiDeviceProfileByNameRoute                 = ApiDeviceProfileRoute + "/" + Name + "/{" + Name + "}"
+	ApiDeviceProfileDeviceCommandByNameRoute    = ApiDeviceProfileByNameRoute + "/" + DeviceCommand + "/{" + CommandName + "}"
+	ApiDeviceProfileResourceByNameRoute         = ApiDeviceProfileByNameRoute + "/" + Resource + "/{" + ResourceName + "}"
 	ApiDeviceProfileByIdRoute                   = ApiDeviceProfileRoute + "/" + Id + "/{" + Id + "}"
 	ApiAllDeviceProfileRoute                    = ApiDeviceProfileRoute + "/" + All
 	ApiDeviceProfileByManufacturerRoute         = ApiDeviceProfileRoute + "/" + Manufacturer + "/{" + Manufacturer + "}"
@@ -95,11 +100,12 @@ const (
 	ApiTransmissionByStatusRoute           = ApiTransmissionRoute + "/" + Status + "/{" + Status + "}"
 	ApiTransmissionByNotificationIdRoute   = ApiTransmissionRoute + "/" + Notification + "/" + Id + "/{" + Id + "}"
 
-	ApiConfigRoute  = ApiBase + "/config"
-	ApiMetricsRoute = ApiBase + "/metrics"
-	ApiPingRoute    = ApiBase + "/ping"
-	ApiVersionRoute = ApiBase + "/version"
-	ApiSecretRoute  = ApiBase + "/secret"
+	ApiConfigRoute         = ApiBase + "/config"
+	ApiMetricsRoute        = ApiBase + "/metrics"
+	ApiPingRoute           = ApiBase + "/ping"
+	ApiVersionRoute        = ApiBase + "/version"
+	ApiSecretRoute         = ApiBase + "/secret"
+	ApiUnitsOfMeasureRoute = ApiBase + "/uom"
 
 	ApiDeviceCallbackRoute      = ApiBase + "/callback/device"
 	ApiDeviceCallbackNameRoute  = ApiBase + "/callback/device/name/{name}"
@@ -109,6 +115,7 @@ const (
 	ApiWatcherCallbackNameRoute = ApiBase + "/callback/watcher/name/{name}"
 	ApiServiceCallbackRoute     = ApiBase + "/callback/service"
 	ApiDiscoveryRoute           = ApiBase + "/discovery"
+	ApiDeviceValidationRoute    = ApiBase + "/validate/device"
 
 	ApiIntervalRoute               = ApiBase + "/interval"
 	ApiAllIntervalRoute            = ApiIntervalRoute + "/" + All
@@ -137,6 +144,7 @@ const (
 	Device        = "device"
 	DeviceId      = "deviceId"
 	DeviceName    = "deviceName"
+	DeviceCommand = "deviceCommand"
 	Check         = "check"
 	Profile       = "profile"
 	Resource      = "resource"
@@ -148,6 +156,7 @@ const (
 	ServiceName   = "serviceName"
 	ResourceName  = "resourceName"
 	ResourceNames = "resourceNames"
+	CommandName   = "commandName"
 	Start         = "start"
 	End           = "end"
 	Age           = "age"
@@ -243,6 +252,7 @@ const (
 	ReadWrite_R  = "R"
 	ReadWrite_W  = "W"
 	ReadWrite_RW = "RW"
+	ReadWrite_WR = "WR"
 )
 
 // Constants for Edgex Environment variable
@@ -270,15 +280,33 @@ const (
 	SecurityFileTokenProviderServiceKey = "security-file-token-provider"
 	SecurityBootstrapperKey             = "security-bootstrapper"
 	SecurityBootstrapperRedisKey        = "security-bootstrapper-redis"
+	SecuritySpiffeTokenProviderKey      = "security-spiffe-token-provider" // nolint:gosec
 )
 
 // Constants related to the possible content types supported by the APIs
 const (
+	Accept          = "Accept"
 	ContentType     = "Content-Type"
 	ContentLength   = "Content-Length"
 	ContentTypeCBOR = "application/cbor"
 	ContentTypeJSON = "application/json"
+	ContentTypeTOML = "application/toml"
 	ContentTypeYAML = "application/x-yaml"
 	ContentTypeText = "text/plain"
 	ContentTypeXML  = "application/xml"
+)
+
+// Constants related to System Events
+const (
+	DeviceSystemEventType         = "device"
+	DeviceSystemEventActionAdd    = "add"
+	DeviceSystemEventActionUpdate = "update"
+	DeviceSystemEventActionDelete = "delete"
+)
+
+const (
+	ConfigStemApp      = "edgex/appservices/"
+	ConfigStemCore     = "edgex/core/"
+	ConfigStemDevice   = "edgex/devices/"
+	ConfigStemSecurity = "edgex/security/"
 )

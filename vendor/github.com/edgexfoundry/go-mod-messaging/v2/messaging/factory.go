@@ -1,5 +1,8 @@
+//go:build !no_messagebus
+// +build !no_messagebus
+
 //
-// Copyright (c) 2019 Intel Corporation
+// Copyright (c) 2021 Intel Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +24,8 @@ import (
 	"strings"
 
 	"github.com/edgexfoundry/go-mod-messaging/v2/internal/pkg/mqtt"
+	"github.com/edgexfoundry/go-mod-messaging/v2/internal/pkg/nats"
+	"github.com/edgexfoundry/go-mod-messaging/v2/internal/pkg/nats/jetstream"
 	"github.com/edgexfoundry/go-mod-messaging/v2/internal/pkg/redis"
 	"github.com/edgexfoundry/go-mod-messaging/v2/internal/pkg/zeromq"
 	"github.com/edgexfoundry/go-mod-messaging/v2/pkg/types"
@@ -35,6 +40,12 @@ const (
 
 	// Redis Pub/Sub messaging implementation
 	Redis = "redis"
+
+	// NatsCore implementation
+	NatsCore = "nats-core"
+
+	// NatsJetStream implementation
+	NatsJetStream = "nats-jetstream"
 )
 
 // NewMessageClient is a factory function to instantiate different message client depending on
@@ -52,6 +63,10 @@ func NewMessageClient(msgConfig types.MessageBusConfig) (MessageClient, error) {
 		return mqtt.NewMQTTClient(msgConfig)
 	case Redis:
 		return redis.NewClient(msgConfig)
+	case NatsCore:
+		return nats.NewClient(msgConfig)
+	case NatsJetStream:
+		return jetstream.NewClient(msgConfig)
 	default:
 		return nil, fmt.Errorf("unknown message type '%s' requested", msgConfig.Type)
 	}

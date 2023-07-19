@@ -1,6 +1,6 @@
 /*******************************************************************************
  * Copyright 2019 Dell Inc.
- * Copyright 2021 Intel Inc.
+ * Copyright 2022 Intel Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -19,10 +19,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/edgexfoundry/go-mod-bootstrap/v2/config"
 	"io/ioutil"
-	"path/filepath"
+	"math"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/edgexfoundry/go-mod-bootstrap/v2/bootstrap/container"
 	"github.com/edgexfoundry/go-mod-bootstrap/v2/bootstrap/environment"
@@ -125,7 +127,7 @@ func (cp *Processor) Process(
 	// the Secret Provider can be initialized and added to the DIC, but only if it is configured to be used.
 	var secretProvider interfaces.SecretProvider
 	if useSecretProvider {
-		secretProvider, err = secret.NewSecretProvider(serviceConfig, cp.ctx, cp.startupTimer, cp.dic)
+		secretProvider, err = secret.NewSecretProvider(serviceConfig, cp.ctx, cp.startupTimer, cp.dic, serviceKey)
 		if err != nil {
 			return fmt.Errorf("failed to create SecretProvider: %s", err.Error())
 		}
@@ -346,7 +348,14 @@ func (cp *Processor) createProviderClient(
 	providerConfig types.ServiceConfig) (configuration.Client, error) {
 
 	var err error
-	providerConfig.BasePath = filepath.Join(configStem, ConfigVersion, serviceKey)
+
+	// The passed in configStem already contains the trailing '/' in most cases so must verify and add if missing.
+	if configStem[len(configStem)-1] != '/' {
+		configStem = configStem + "/"
+	}
+
+	// Note: Can't use filepath.Join as it uses `\` on Windows which Consul doesn't recognize as a path separator.
+	providerConfig.BasePath = fmt.Sprintf("%s%s/%s", configStem, ConfigVersion, serviceKey)
 	if getAccessToken != nil {
 		providerConfig.AccessToken, err = getAccessToken()
 		if err != nil {
@@ -450,7 +459,7 @@ func (cp *Processor) listenForChanges(serviceConfig interfaces.Configuration, co
 		updateStream := make(chan interface{})
 		defer close(updateStream)
 
-		configClient.WatchForChanges(updateStream, errorStream, serviceConfig.EmptyWritablePtr(), writableKey)
+		go configClient.WatchForChanges(updateStream, errorStream, serviceConfig.EmptyWritablePtr(), writableKey)
 
 		for {
 			select {
@@ -460,7 +469,7 @@ func (cp *Processor) listenForChanges(serviceConfig interfaces.Configuration, co
 				return
 
 			case ex := <-errorStream:
-				lc.Error(ex.Error())
+				lc.Errorf("error occurred during listening to the configuration changes: %s", ex.Error())
 
 			case raw, ok := <-updateStream:
 				if !ok {
@@ -477,6 +486,7 @@ func (cp *Processor) listenForChanges(serviceConfig interfaces.Configuration, co
 
 				previousInsecureSecrets := serviceConfig.GetInsecureSecrets()
 				previousLogLevel := serviceConfig.GetLogLevel()
+				previousTelemetryInterval := serviceConfig.GetTelemetryInfo().Interval
 
 				if !serviceConfig.UpdateWritableFromRaw(raw) {
 					lc.Error("ListenForChanges() type check failed")
@@ -485,6 +495,7 @@ func (cp *Processor) listenForChanges(serviceConfig interfaces.Configuration, co
 
 				currentInsecureSecrets := serviceConfig.GetInsecureSecrets()
 				currentLogLevel := serviceConfig.GetLogLevel()
+				currentTelemetryInterval := serviceConfig.GetTelemetryInfo().Interval
 
 				lc.Info("Writeable configuration has been updated from the Configuration Provider")
 
@@ -501,8 +512,33 @@ func (cp *Processor) listenForChanges(serviceConfig interfaces.Configuration, co
 					lc.Info("Insecure Secrets have been updated")
 					secretProvider := container.SecretProviderFrom(cp.dic.Get)
 					if secretProvider != nil {
-						secretProvider.SecretsUpdated()
+						// Find the updated secret's path and perform call backs.
+						updatedSecrets := getSecretPathsChanged(previousInsecureSecrets, currentInsecureSecrets)
+						for _, v := range updatedSecrets {
+							secretProvider.SecretUpdatedAtPath(v)
+						}
 					}
+
+				case currentTelemetryInterval != previousTelemetryInterval:
+					lc.Info("Telemetry interval has been updated. Processing new value...")
+					interval, err := time.ParseDuration(currentTelemetryInterval)
+					if err != nil {
+						lc.Errorf("update telemetry interval value is invalid time duration, using previous value: %s", err.Error())
+						break
+					}
+
+					if interval == 0 {
+						lc.Infof("0 specified for metrics reporting interval. Setting to max duration to effectively disable reporting.")
+						interval = math.MaxInt64
+					}
+
+					metricsManager := container.MetricsManagerFrom(cp.dic.Get)
+					if metricsManager == nil {
+						lc.Error("metrics manager not available while updating telemetry interval")
+						break
+					}
+
+					metricsManager.ResetInterval(interval)
 
 				default:
 					// Signal that configuration updates exists that have not already been processed.
@@ -518,4 +554,37 @@ func (cp *Processor) listenForChanges(serviceConfig interfaces.Configuration, co
 // logConfigInfo logs the config info message with number over overrides that occurred.
 func (cp *Processor) logConfigInfo(message string, overrideCount int) {
 	cp.lc.Infof("%s (%d envVars overrides applied)", message, overrideCount)
+}
+
+// getSecretPathsChanged returns a slice of paths that have changed secrets or are new.
+func getSecretPathsChanged(prevVals config.InsecureSecrets, curVals config.InsecureSecrets) []string {
+	var updatedPaths []string
+	for key, prevVal := range prevVals {
+		curVal := curVals[key]
+
+		// Catches removed secrets
+		if curVal.Secrets == nil {
+			updatedPaths = append(updatedPaths, prevVal.Path)
+			continue
+		}
+
+		// Catches changes to secret data or to the path name
+		if !reflect.DeepEqual(prevVal, curVal) {
+			updatedPaths = append(updatedPaths, curVal.Path)
+
+			// Catches path name changes, so also include the previous path
+			if prevVal.Path != curVal.Path {
+				updatedPaths = append(updatedPaths, prevVal.Path)
+			}
+		}
+	}
+
+	for key, curVal := range curVals {
+		// Catches new secrets added
+		if prevVals[key].Secrets == nil {
+			updatedPaths = append(updatedPaths, curVal.Path)
+		}
+	}
+
+	return updatedPaths
 }

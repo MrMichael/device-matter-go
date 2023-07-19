@@ -29,24 +29,11 @@ func (s *DeviceService) AddDevice(device models.Device) (string, error) {
 		return d.Id, errors.NewCommonEdgeX(errors.KindDuplicateName, fmt.Sprintf("name conflicted, Device %s exists", device.Name), nil)
 	}
 
-	_, cacheExist := cache.Profiles().ForName(device.ProfileName)
-	if !cacheExist {
-		res, err := s.edgexClients.DeviceProfileClient.DeviceProfileByName(context.Background(), device.ProfileName)
-		if err != nil {
-			errMsg := fmt.Sprintf("failed to find Profile %s for Device %s", device.ProfileName, device.Name)
-			s.LoggingClient.Error(errMsg)
-			return "", err
-		}
-		err = cache.Profiles().Add(dtos.ToDeviceProfileModel(res.Profile))
-		if err != nil {
-			return "", errors.NewCommonEdgeX(errors.KindServerError, fmt.Sprintf("failed to cache the profile %s", res.Profile.Name), err)
-		}
-	}
 	device.ServiceName = s.ServiceName
 
 	s.LoggingClient.Debugf("Adding managed Device %s", device.Name)
 	req := requests.NewAddDeviceRequest(dtos.FromDeviceModelToDTO(device))
-	ctx := context.WithValue(context.Background(), common.CorrelationHeader, uuid.NewString())
+	ctx := context.WithValue(context.Background(), common.CorrelationHeader, uuid.NewString()) // nolint:staticcheck
 	res, err := s.edgexClients.DeviceClient.Add(ctx, []requests.AddDeviceRequest{req})
 	if err != nil {
 		s.LoggingClient.Errorf("failed to add Device %s to Core Metadata: %v", device.Name, err)
@@ -83,7 +70,7 @@ func (s *DeviceService) RemoveDeviceByName(name string) error {
 	}
 
 	s.LoggingClient.Debugf("Removing managed Device %s", device.Name)
-	ctx := context.WithValue(context.Background(), common.CorrelationHeader, uuid.NewString())
+	ctx := context.WithValue(context.Background(), common.CorrelationHeader, uuid.NewString()) // nolint:staticcheck
 	_, err := s.edgexClients.DeviceClient.DeleteDeviceByName(ctx, name)
 	if err != nil {
 		s.LoggingClient.Errorf("failed to delete Device %s in Core Metadata", name)
@@ -105,7 +92,7 @@ func (s *DeviceService) UpdateDevice(device models.Device) error {
 	s.LoggingClient.Debugf("Updating managed Device %s", device.Name)
 	req := requests.NewUpdateDeviceRequest(dtos.FromDeviceModelToUpdateDTO(device))
 	req.Device.Id = nil
-	ctx := context.WithValue(context.Background(), common.CorrelationHeader, uuid.NewString())
+	ctx := context.WithValue(context.Background(), common.CorrelationHeader, uuid.NewString()) // nolint:staticcheck
 	_, err := s.edgexClients.DeviceClient.Update(ctx, []requests.UpdateDeviceRequest{req})
 	if err != nil {
 		s.LoggingClient.Errorf("failed to update Device %s in Core Metadata: %v", device.Name, err)
@@ -132,7 +119,7 @@ func (s *DeviceService) UpdateDeviceOperatingState(deviceName string, state stri
 			OperatingState: &state,
 		},
 	}
-	ctx := context.WithValue(context.Background(), common.CorrelationHeader, uuid.NewString())
+	ctx := context.WithValue(context.Background(), common.CorrelationHeader, uuid.NewString()) // nolint:staticcheck
 	_, err := s.edgexClients.DeviceClient.Update(ctx, []requests.UpdateDeviceRequest{req})
 	if err != nil {
 		s.LoggingClient.Errorf("failed to update Device %s OperatingState in Core Metadata: %v", d.Name, err)

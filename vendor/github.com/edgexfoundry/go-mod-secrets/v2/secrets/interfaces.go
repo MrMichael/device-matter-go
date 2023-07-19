@@ -48,6 +48,10 @@ type SecretClient interface {
 
 	// SetAuthToken sets the internal Auth Token with the new value specified.
 	SetAuthToken(ctx context.Context, token string) error
+
+	// GetKeys retrieves the keys at the provided sub-path. Secret Store returns an array of keys for a given path when
+	// retrieving a list of keys, versus a k/v map when retrieving secrets.
+	GetKeys(subPath string) ([]string, error)
 }
 
 // SecretStoreClient provides a contract for managing a Secret Store from a secret store provider.
@@ -66,4 +70,6 @@ type SecretStoreClient interface {
 	LookupTokenAccessor(token string, accessor string) (types.TokenMetadata, error)
 	LookupToken(token string) (types.TokenMetadata, error)
 	RevokeToken(token string) error
+	ConfigureConsulAccess(secretStoreToken string, bootstrapACLToken string, consulHost string, consulPort int) error
+	CreateRole(secretStoreToken string, consulRole types.ConsulRole) error
 }

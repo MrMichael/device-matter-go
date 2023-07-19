@@ -1,7 +1,7 @@
 /*******************************************************************************
  * Copyright 2018 Dell Inc.
- * Copyright 2020 Intel Inc.
- * Copyright 2021 IOTech Ltd.
+ * Copyright 2022 Intel Inc.
+ * Copyright 2021-2022 IOTech Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -18,6 +18,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/common"
 
@@ -43,7 +44,7 @@ type ServiceInfo struct {
 	// MaxResultCount specifies the maximum size list supported
 	// in response to REST calls to other services.
 	MaxResultCount int
-	// MaxRequestSize defines the maximum size of http request body in bytes
+	// MaxRequestSize defines the maximum size of http request body in kilobytes
 	MaxRequestSize int64
 	// RequestTimeout specifies a timeout (in milliseconds) for
 	// processing REST request calls from other services.
@@ -120,6 +121,10 @@ type ClientInfo struct {
 	Port int
 	// Protocol indicates the protocol to use when accessing a given service
 	Protocol string
+	// UseMessageBus indicates weather to use Messaging version of client
+	UseMessageBus bool
+	// Topics holds the MessageBus topics used by the client to communicate to the service
+	Topics map[string]string
 }
 
 func (c ClientInfo) Url() string {
@@ -145,6 +150,9 @@ type SecretStoreInfo struct {
 	// DisableScrubSecretsFile specifies to not scrub secrets file after importing. Service will fail start-up if
 	// not disabled and file can not be written.
 	DisableScrubSecretsFile bool
+
+	// RuntimeTokenProvider is optional if not using delayed start from spiffe-token provider
+	RuntimeTokenProvider types.RuntimeTokenProviderInfo
 }
 
 type Database struct {
@@ -178,11 +186,13 @@ type InsecureSecretsInfo struct {
 
 // BootstrapConfiguration defines the configuration elements required by the bootstrap.
 type BootstrapConfiguration struct {
-	Clients     map[string]ClientInfo
-	Service     ServiceInfo
-	Config      ConfigProviderInfo
-	Registry    RegistryInfo
-	SecretStore SecretStoreInfo
+	Clients      map[string]ClientInfo
+	Service      ServiceInfo
+	Config       ConfigProviderInfo
+	Registry     RegistryInfo
+	SecretStore  SecretStoreInfo
+	MessageQueue MessageBusInfo
+	ExternalMQTT ExternalMQTTInfo
 }
 
 // MessageBusInfo provides parameters related to connecting to a message bus as a publisher
@@ -214,9 +224,82 @@ type MessageBusInfo struct {
 	Optional map[string]string
 	// SubscribeEnabled indicates whether enable the subscription to the Message Queue
 	SubscribeEnabled bool
+	// Topics allows MessageBusInfo to be more flexible with respect to topics.
+	// TODO: move PublishTopicPrefix and SubscribeTopic to Topics in EdgeX 3.0
+	Topics map[string]string
+}
+
+type ExternalMQTTInfo struct {
+	// Url contains the fully qualified URL to connect to the MQTT broker
+	Url string
+	// SubscribeTopics is a comma separated list of topics in which to subscribe
+	SubscribeTopics string
+	// PublishTopic is the topic to publish pipeline output (if any)
+	PublishTopic string
+	// Topics allows ExternalMQTTInfo to be more flexible with respect to topics.
+	// TODO: move PublishTopic and SubscribeTopics to Topics in EdgeX 3.0
+	Topics map[string]string
+	// ClientId to connect to the broker with.
+	ClientId string
+	// ConnectTimeout is a time duration indicating how long to wait timing out on the broker connection
+	ConnectTimeout string
+	// AutoReconnect indicated whether to retry connection if disconnected
+	AutoReconnect bool
+	// KeepAlive is seconds between client ping when no active data flowing to avoid client being disconnected
+	KeepAlive int64
+	// QoS for MQTT Connection
+	QoS byte
+	// Retain setting for MQTT Connection
+	Retain bool
+	// SkipCertVerify indicates if the certificate verification should be skipped
+	SkipCertVerify bool
+	// SecretPath is the name of the path in secret provider to retrieve your secrets
+	SecretPath string
+	// AuthMode indicates what to use when connecting to the broker. Options are "none", "cacert" , "usernamepassword", "clientcert".
+	// If a CA Cert exists in the SecretPath then it will be used for all modes except "none".
+	AuthMode string
+	// RetryDuration indicates how long (in seconds) to wait timing out on the MQTT client creation
+	RetryDuration int
+	// RetryInterval indicates the time (in seconds) that will be waited between attempts to create MQTT client
+	RetryInterval int
+	// Enabled determines whether the service needs to connect to the external MQTT broker
+	Enabled bool
 }
 
 // URL constructs a URL from the protocol, host and port and returns that as a string.
 func (p MessageBusInfo) URL() string {
 	return fmt.Sprintf("%s://%s:%v", p.Protocol, p.Host, p.Port)
+}
+
+// TelemetryInfo contains the configuration for a service's metrics collection
+type TelemetryInfo struct {
+	// Interval is the time duration in which to collect and report the service's metrics
+	Interval string
+	// PublishTopicPrefix is the base topic in which to publish (report) the service's metrics to the EdgeX MessageBus
+	// The service name and the metric name are appended to this base topic. i.e. <prefix>/<service-name>/<metric-name>
+	PublishTopicPrefix string
+	// Metrics is the list of service's metrics that can be collected. Each of the service's metrics must be in the list
+	// and set to true if enable or false if disabled.
+	Metrics map[string]bool
+	// Tags is a list of service level tags that are attached to every metric reported for the service
+	// Example: Gateway = "Gateway123"
+	Tags map[string]string
+}
+
+// GetEnabledMetricName returns the matching configured Metric name and if it is enabled.
+func (t *TelemetryInfo) GetEnabledMetricName(metricName string) (string, bool) {
+	for configMetricName, enabled := range t.Metrics {
+		// Match on config metric name as prefix of passed in metric name (service's metric item name)
+		// This allows for a class of Metrics to be enabled with one configured metric name.
+		// App SDK uses this for PipelineMetrics by appending the pipeline ID to the name
+		// of the metric(s) it is collecting for multiple function pipelines.
+		if !strings.HasPrefix(metricName, configMetricName) {
+			continue
+		}
+
+		return configMetricName, enabled
+	}
+
+	// Service's metric name did not match any config Metric name.
+	return "", false
 }

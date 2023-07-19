@@ -155,10 +155,29 @@ func RunAndReturnWaitGroup(
 	// call individual bootstrap handlers.
 	startedSuccessfully := true
 	for i := range handlers {
-		if handlers[i](ctx, &wg, startupTimer, dic) == false {
+		if !handlers[i](ctx, &wg, startupTimer, dic) {
 			cancel()
 			startedSuccessfully = false
 			break
+		}
+	}
+
+	// Service that don't use the Security Provider also will not collect metrics. These are the security services that
+	// run during bootstrapping of the secure deployment
+	if useSecretProvider && startedSuccessfully {
+		// Have to delay registering the general common service metrics until all bootstrap handlers have run so that there is
+		// opportunity for the MetricsManager to have been created.
+		metricsManager := container.MetricsManagerFrom(dic.Get)
+		if metricsManager != nil {
+			secretProvider := container.SecretProviderFrom(dic.Get)
+			if secretProvider != nil {
+				metrics := secretProvider.GetMetricsToRegister()
+				registerMetrics(metricsManager, metrics, lc)
+
+				// TODO: use this same approach to register future service metric controlled by other components
+			}
+		} else {
+			lc.Warn("MetricsManager not available. General common service metrics will not be reported. ")
 		}
 	}
 
@@ -181,7 +200,7 @@ func Run(
 	useSecretProvider bool,
 	handlers []interfaces.BootstrapHandler) {
 
-	wg, deferred, _ := RunAndReturnWaitGroup(
+	wg, deferred, success := RunAndReturnWaitGroup(
 		ctx,
 		cancel,
 		commonFlags,
@@ -195,8 +214,27 @@ func Run(
 		handlers,
 	)
 
+	if !success {
+		// This only occurs when a bootstrap handler has fail.
+		// The handler will have logged an error, so not need to log a message here.
+		cancel()
+		os.Exit(1)
+	}
+
 	defer deferred()
 
 	// wait for go routines to stop executing.
 	wg.Wait()
+}
+
+func registerMetrics(metricsManager interfaces.MetricsManager, metrics map[string]interface{}, lc logger.LoggingClient) {
+	for metricName, metric := range metrics {
+		err := metricsManager.Register(metricName, metric, nil)
+		if err != nil {
+			lc.Warnf("Unable to register %s metric for reporting: %v", metricName, err)
+			continue
+		}
+
+		lc.Infof("%s metric registered and will be reported (if enabled)", metricName)
+	}
 }
