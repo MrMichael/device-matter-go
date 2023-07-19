@@ -21,23 +21,30 @@ import (
 	"time"
 
 	"github.com/edgexfoundry/go-mod-bootstrap/v2/bootstrap/interfaces"
+	gometrics "github.com/rcrowley/go-metrics"
 
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/clients/logger"
 )
 
 // InsecureProvider implements the SecretProvider interface for insecure secrets
 type InsecureProvider struct {
-	lc            logger.LoggingClient
-	configuration interfaces.Configuration
-	lastUpdated   time.Time
+	lc                        logger.LoggingClient
+	configuration             interfaces.Configuration
+	lastUpdated               time.Time
+	registeredSecretCallbacks map[string]func(path string)
+	securitySecretsRequested  gometrics.Counter
+	securitySecretsStored     gometrics.Counter
 }
 
 // NewInsecureProvider creates, initializes Provider for insecure secrets.
 func NewInsecureProvider(config interfaces.Configuration, lc logger.LoggingClient) *InsecureProvider {
 	return &InsecureProvider{
-		configuration: config,
-		lc:            lc,
-		lastUpdated:   time.Now(),
+		configuration:             config,
+		lc:                        lc,
+		lastUpdated:               time.Now(),
+		registeredSecretCallbacks: make(map[string]func(path string)),
+		securitySecretsRequested:  gometrics.NewCounter(),
+		securitySecretsStored:     gometrics.NewCounter(),
 	}
 }
 
@@ -46,6 +53,8 @@ func NewInsecureProvider(config interfaces.Configuration, lc logger.LoggingClien
 // keys specifies the secrets which to retrieve. If no keys are provided then all the keys associated with the
 // specified path will be returned.
 func (p *InsecureProvider) GetSecret(path string, keys ...string) (map[string]string, error) {
+	p.securitySecretsRequested.Inc(1)
+
 	results := make(map[string]string)
 	pathExists := false
 	var missingKeys []string
@@ -111,4 +120,81 @@ func (p *InsecureProvider) SecretsLastUpdated() time.Time {
 // so just returning an empty token.
 func (p *InsecureProvider) GetAccessToken(_ string, _ string) (string, error) {
 	return "", nil
+}
+
+// HasSecret returns true if the service's SecretStore contains a secret at the specified path.
+func (p *InsecureProvider) HasSecret(path string) (bool, error) {
+	insecureSecrets := p.configuration.GetInsecureSecrets()
+	if insecureSecrets == nil {
+		err := fmt.Errorf("InsecureSecret missing from configuration")
+		return false, err
+	}
+
+	for _, insecureSecret := range insecureSecrets {
+		if insecureSecret.Path == path {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// ListSecretPaths returns a list of paths for the current service from an insecure/secure secret store.
+func (p *InsecureProvider) ListSecretPaths() ([]string, error) {
+	var results []string
+
+	insecureSecrets := p.configuration.GetInsecureSecrets()
+	if insecureSecrets == nil {
+		err := fmt.Errorf("InsecureSecrets missing from configuration")
+		return nil, err
+	}
+
+	for _, insecureSecret := range insecureSecrets {
+		results = append(results, insecureSecret.Path)
+	}
+
+	return results, nil
+}
+
+// RegisteredSecretUpdatedCallback registers a callback for a secret.
+func (p *InsecureProvider) RegisteredSecretUpdatedCallback(path string, callback func(path string)) error {
+	if _, ok := p.registeredSecretCallbacks[path]; ok {
+		return fmt.Errorf("there is a callback already registered for path '%v'", path)
+	}
+
+	// Register new call back for path.
+	p.registeredSecretCallbacks[path] = callback
+
+	return nil
+}
+
+// SecretUpdatedAtPath performs updates and callbacks for an updated secret or path.
+func (p *InsecureProvider) SecretUpdatedAtPath(path string) {
+	p.securitySecretsStored.Inc(1)
+
+	p.lastUpdated = time.Now()
+	if p.registeredSecretCallbacks != nil {
+		// Execute Callback for provided path.
+		for k, v := range p.registeredSecretCallbacks {
+			if k == path {
+				p.lc.Debugf("invoking callback registered for path: '%s'", path)
+				v(path)
+				return
+			}
+		}
+	}
+}
+
+// DeregisterSecretUpdatedCallback removes a secret's registered callback path.
+func (p *InsecureProvider) DeregisterSecretUpdatedCallback(path string) {
+	// Remove path from map.
+	delete(p.registeredSecretCallbacks, path)
+}
+
+// GetMetricsToRegister returns all metric objects that needs to be registered.
+func (p *InsecureProvider) GetMetricsToRegister() map[string]interface{} {
+	return map[string]interface{}{
+		secretsRequestedMetricName: p.securitySecretsRequested,
+		secretsStoredMetricName:    p.securitySecretsStored,
+	}
 }

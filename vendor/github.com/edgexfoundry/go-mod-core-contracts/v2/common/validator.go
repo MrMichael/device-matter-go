@@ -1,3 +1,5 @@
+//go:build !no_dto_validator
+
 //
 // Copyright (C) 2020-2021 IOTech Ltd
 //
@@ -32,7 +34,7 @@ const (
 const (
 	// Per https://tools.ietf.org/html/rfc3986#section-2.3, unreserved characters= ALPHA / DIGIT / "-" / "." / "_" / "~"
 	// Also due to names used in topics for Redis Pub/Sub, "."are not allowed
-	rFC3986UnreservedCharsRegexString = "^[a-zA-Z0-9-_~]+$"
+	rFC3986UnreservedCharsRegexString = "^[a-zA-Z0-9-_~:;=]+$"
 	intervalDatetimeLayout            = "20060102T150405"
 	name                              = "Name"
 )
@@ -43,12 +45,12 @@ var (
 
 func init() {
 	val = validator.New()
-	val.RegisterValidation(dtoDurationTag, ValidateDuration)
-	val.RegisterValidation(dtoUuidTag, ValidateDtoUuid)
-	val.RegisterValidation(dtoNoneEmptyStringTag, ValidateDtoNoneEmptyString)
-	val.RegisterValidation(dtoValueType, ValidateValueType)
-	val.RegisterValidation(dtoRFC3986UnreservedCharTag, ValidateDtoRFC3986UnreservedChars)
-	val.RegisterValidation(dtoInterDatetimeTag, ValidateIntervalDatetime)
+	_ = val.RegisterValidation(dtoDurationTag, ValidateDuration)
+	_ = val.RegisterValidation(dtoUuidTag, ValidateDtoUuid)
+	_ = val.RegisterValidation(dtoNoneEmptyStringTag, ValidateDtoNoneEmptyString)
+	_ = val.RegisterValidation(dtoValueType, ValidateValueType)
+	_ = val.RegisterValidation(dtoRFC3986UnreservedCharTag, ValidateDtoRFC3986UnreservedChars)
+	_ = val.RegisterValidation(dtoInterDatetimeTag, ValidateIntervalDatetime)
 }
 
 // Validate function will use the validator package to validate the struct annotation
@@ -93,7 +95,7 @@ func getErrorMessage(e validator.FieldError) string {
 	case dtoNoneEmptyStringTag:
 		msg = fmt.Sprintf("%s field should not be empty string", fieldName)
 	case dtoRFC3986UnreservedCharTag:
-		msg = fmt.Sprintf("%s field only allows unreserved characters which are ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_~", fieldName)
+		msg = fmt.Sprintf("%s field only allows unreserved characters which are ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_~:;=", fieldName)
 	default:
 		msg = fmt.Sprintf("%s field validation failed on the %s tag", fieldName, tag)
 	}
@@ -145,7 +147,7 @@ func ValidateDtoNoneEmptyString(fl validator.FieldLevel) bool {
 func ValidateValueType(fl validator.FieldLevel) bool {
 	valueType := fl.Field().String()
 	for _, v := range valueTypes {
-		if strings.ToLower(valueType) == strings.ToLower(v) {
+		if strings.EqualFold(valueType, v) {
 			return true
 		}
 	}

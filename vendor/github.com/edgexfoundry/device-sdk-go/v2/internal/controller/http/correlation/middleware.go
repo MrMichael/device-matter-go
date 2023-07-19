@@ -23,7 +23,7 @@ func ManageHeader(next http.Handler) http.Handler {
 		if hdr == "" {
 			hdr = uuid.New().String()
 		}
-		ctx := context.WithValue(r.Context(), common.CorrelationHeader, hdr)
+		ctx := context.WithValue(r.Context(), common.CorrelationHeader, hdr) // nolint:staticcheck
 		r = r.WithContext(ctx)
 		next.ServeHTTP(w, r)
 	})
@@ -41,17 +41,6 @@ func LoggingMiddleware(lc logger.LoggingClient) func(http.Handler) http.Handler 
 			} else {
 				next.ServeHTTP(w, r)
 			}
-		})
-	}
-}
-
-func RequestLimitMiddleware(n int64) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if n > 0 {
-				r.Body = http.MaxBytesReader(w, r.Body, n)
-			}
-			next.ServeHTTP(w, r)
 		})
 	}
 }

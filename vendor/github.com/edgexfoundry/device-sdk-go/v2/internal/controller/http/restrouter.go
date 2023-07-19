@@ -1,7 +1,7 @@
 // -*- Mode: Go; indent-tabs-mode: t -*-
 //
 // Copyright (C) 2017-2018 Canonical Ltd
-// Copyright (C) 2018-2021 IOTech Ltd
+// Copyright (C) 2018-2022 IOTech Ltd
 // Copyright (c) 2019 Intel Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -14,6 +14,7 @@ import (
 	"net/http"
 
 	bootstrapContainer "github.com/edgexfoundry/go-mod-bootstrap/v2/bootstrap/container"
+	"github.com/edgexfoundry/go-mod-bootstrap/v2/bootstrap/interfaces"
 	"github.com/edgexfoundry/go-mod-bootstrap/v2/di"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/clients/logger"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/common"
@@ -22,7 +23,6 @@ import (
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/errors"
 	"github.com/gorilla/mux"
 
-	"github.com/edgexfoundry/device-sdk-go/v2/internal/container"
 	"github.com/edgexfoundry/device-sdk-go/v2/internal/controller/http/correlation"
 )
 
@@ -31,16 +31,24 @@ type RestController struct {
 	router         *mux.Router
 	reservedRoutes map[string]bool
 	dic            *di.Container
+	serviceName    string
+	customConfig   interfaces.UpdatableConfig
 }
 
-func NewRestController(r *mux.Router, dic *di.Container) *RestController {
+func NewRestController(r *mux.Router, dic *di.Container, serviceName string) *RestController {
 	lc := bootstrapContainer.LoggingClientFrom(dic.Get)
 	return &RestController{
 		lc:             lc,
 		router:         r,
 		reservedRoutes: make(map[string]bool),
 		dic:            dic,
+		serviceName:    serviceName,
 	}
+}
+
+// SetCustomConfigInfo sets the custom configuration, which is used to include the service's custom config in the /config endpoint response.
+func (c *RestController) SetCustomConfigInfo(customConfig interfaces.UpdatableConfig) {
+	c.customConfig = customConfig
 }
 
 func (c *RestController) InitRestRoutes() {
@@ -54,8 +62,11 @@ func (c *RestController) InitRestRoutes() {
 	c.addReservedRoute(common.ApiSecretRoute, c.Secret).Methods(http.MethodPost)
 	// discovery
 	c.addReservedRoute(common.ApiDiscoveryRoute, c.Discovery).Methods(http.MethodPost)
+	// validate
+	c.addReservedRoute(common.ApiDeviceValidationRoute, c.ValidateDevice).Methods(http.MethodPost)
 	// device command
-	c.addReservedRoute(common.ApiDeviceNameCommandNameRoute, c.Command).Methods(http.MethodPut, http.MethodGet)
+	c.addReservedRoute(common.ApiDeviceNameCommandNameRoute, c.GetCommand).Methods(http.MethodGet)
+	c.addReservedRoute(common.ApiDeviceNameCommandNameRoute, c.SetCommand).Methods(http.MethodPut)
 	// callback
 	c.addReservedRoute(common.ApiDeviceCallbackRoute, c.AddDevice).Methods(http.MethodPost)
 	c.addReservedRoute(common.ApiDeviceCallbackRoute, c.UpdateDevice).Methods(http.MethodPut)
@@ -66,7 +77,6 @@ func (c *RestController) InitRestRoutes() {
 	c.addReservedRoute(common.ApiWatcherCallbackNameRoute, c.DeleteProvisionWatcher).Methods(http.MethodDelete)
 	c.addReservedRoute(common.ApiServiceCallbackRoute, c.UpdateDeviceService).Methods(http.MethodPut)
 
-	c.router.Use(correlation.RequestLimitMiddleware(container.ConfigurationFrom(c.dic.Get).Service.MaxRequestSize))
 	c.router.Use(correlation.ManageHeader)
 	c.router.Use(correlation.LoggingMiddleware(c.lc))
 }

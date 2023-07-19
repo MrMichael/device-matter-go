@@ -17,9 +17,14 @@ package redis
 
 import (
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
+	"os"
+	"reflect"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/edgexfoundry/go-mod-messaging/v2/internal/pkg"
 	"github.com/edgexfoundry/go-mod-messaging/v2/pkg/types"
@@ -33,13 +38,13 @@ const (
 )
 
 // Client MessageClient implementation which provides functionality for sending and receiving messages using
-// RedisStreams.
+// Redis Pub/Sub.
 type Client struct {
 	// Client used for functionality related to reading messages
 	subscribeClient RedisClient
 
 	// Used to avoid multiple subscriptions to the same topic
-	existingTopics map[string]struct{}
+	existingTopics map[string]bool
 	mapMutex       *sync.Mutex
 
 	// Client used for functionality related to sending messages
@@ -48,7 +53,8 @@ type Client struct {
 
 // NewClient creates a new Client based on the provided configuration.
 func NewClient(messageBusConfig types.MessageBusConfig) (Client, error) {
-	return NewClientWithCreator(messageBusConfig, NewGoRedisClientWrapper, tls.X509KeyPair, tls.LoadX509KeyPair)
+	return NewClientWithCreator(messageBusConfig, NewGoRedisClientWrapper, tls.X509KeyPair, tls.LoadX509KeyPair,
+		x509.ParseCertificate, os.ReadFile, pem.Decode)
 }
 
 // NewClientWithCreator creates a new Client based on the provided configuration while allowing more control on the
@@ -57,7 +63,10 @@ func NewClientWithCreator(
 	messageBusConfig types.MessageBusConfig,
 	creator RedisClientCreator,
 	pairCreator pkg.X509KeyPairCreator,
-	keyLoader pkg.X509KeyLoader) (Client, error) {
+	keyLoader pkg.X509KeyLoader,
+	caCertCreator pkg.X509CaCertCreator,
+	caCertLoader pkg.X509CaCertLoader,
+	pemDecoder pkg.PEMDecoder) (Client, error) {
 
 	// Parse Optional configuration properties
 	optionalClientConfiguration, err := NewClientConfiguration(messageBusConfig)
@@ -82,7 +91,10 @@ func NewClientWithCreator(
 			tlsConfigurationOptions,
 			creator,
 			pairCreator,
-			keyLoader)
+			keyLoader,
+			caCertCreator,
+			caCertLoader,
+			pemDecoder)
 
 		if err != nil {
 			return Client{}, err
@@ -97,7 +109,10 @@ func NewClientWithCreator(
 			tlsConfigurationOptions,
 			creator,
 			pairCreator,
-			keyLoader)
+			keyLoader,
+			caCertCreator,
+			caCertLoader,
+			pemDecoder)
 
 		if err != nil {
 			return Client{}, err
@@ -106,7 +121,7 @@ func NewClientWithCreator(
 
 	return Client{
 		subscribeClient: subscribeClient,
-		existingTopics:  make(map[string]struct{}),
+		existingTopics:  make(map[string]bool),
 		mapMutex:        new(sync.Mutex),
 		publishClient:   publishClient,
 	}, nil
@@ -118,7 +133,7 @@ func (c Client) Connect() error {
 	return nil
 }
 
-// Publish sends the provided message to appropriate Redis stream.
+// Publish sends the provided message to appropriate Redis Pub/Sub.
 func (c Client) Publish(message types.MessageEnvelope, topic string) error {
 	if c.publishClient == nil {
 		return pkg.NewMissingConfigurationErr("PublishHostInfo", "Unable to create a connection for publishing")
@@ -130,10 +145,16 @@ func (c Client) Publish(message types.MessageEnvelope, topic string) error {
 	}
 
 	topic = convertToRedisTopicScheme(topic)
-	return c.publishClient.Send(topic, message)
+	var err error
+	if err = c.publishClient.Send(topic, message); err != nil && strings.Contains(err.Error(), "EOF") {
+		// Redis may have been restarted and the first attempt will fail with EOF, so need to try again
+		err = c.publishClient.Send(topic, message)
+	}
+
+	return err
 }
 
-// Subscribe creates background processes which reads messages from the appropriate Redis stream and sends to the
+// Subscribe creates background processes which reads messages from the appropriate Redis Pub/Sub and sends to the
 // provided channels
 func (c Client) Subscribe(topics []types.TopicChannel, messageErrors chan error) error {
 	if c.subscribeClient == nil {
@@ -146,16 +167,29 @@ func (c Client) Subscribe(topics []types.TopicChannel, messageErrors chan error)
 	}
 
 	for i := range topics {
+
 		go func(topic types.TopicChannel) {
 			topicName := convertToRedisTopicScheme(topic.Topic)
 			messageChannel := topic.Messages
+			var previousErr error
+
 			for {
+
 				message, err := c.subscribeClient.Receive(topicName)
 				if err != nil {
+					// This handles case when getting same repeated error due to Redis connectivity issue
+					// Avoids starving of other threads/processes and recipient spamming the log file.
+					if previousErr != nil && reflect.DeepEqual(err, previousErr) {
+						time.Sleep(1 * time.Millisecond) // Sleep allows other threads to get time
+						continue
+					}
 					messageErrors <- err
+
+					previousErr = err
 					continue
 				}
 
+				previousErr = nil
 				message.ReceivedTopic = convertFromRedisTopicScheme(message.ReceivedTopic)
 
 				messageChannel <- *message
@@ -203,7 +237,7 @@ func (c Client) validateTopics(topics []types.TopicChannel) error {
 			return fmt.Errorf("subscription for '%s' topic already exists, must be unique", topic.Topic)
 		}
 
-		c.existingTopics[topic.Topic] = struct{}{}
+		c.existingTopics[topic.Topic] = true
 	}
 
 	return nil
@@ -216,13 +250,19 @@ func createRedisClient(
 	tlsConfigurationOptions pkg.TlsConfigurationOptions,
 	creator RedisClientCreator,
 	pairCreator pkg.X509KeyPairCreator,
-	keyLoader pkg.X509KeyLoader) (RedisClient, error) {
+	keyLoader pkg.X509KeyLoader,
+	caCertCreator pkg.X509CaCertCreator,
+	caCertLoader pkg.X509CaCertLoader,
+	pemDecoder pkg.PEMDecoder) (RedisClient, error) {
 
 	tlsConfig, err := pkg.GenerateTLSForClientClientOptions(
 		redisServerURL,
 		tlsConfigurationOptions,
 		pairCreator,
-		keyLoader)
+		keyLoader,
+		caCertCreator,
+		caCertLoader,
+		pemDecoder)
 
 	if err != nil {
 		return nil, err
@@ -232,9 +272,9 @@ func createRedisClient(
 }
 
 func convertToRedisTopicScheme(topic string) string {
-	// RedisStreams uses "." for separator and "*" for wild cards.
+	// Redis Pub/Sub uses "." for separator and "*" for wild cards.
 	// Since we have standardized on the MQTT style scheme or "/" & "#" we need to
-	// convert it to the RedisStreams scheme.
+	// convert it to the Redis Pub/Sub scheme.
 	topic = strings.Replace(topic, StandardTopicSeparator, RedisTopicSeparator, -1)
 	topic = strings.Replace(topic, StandardWildcard, RedisWildcard, -1)
 
@@ -242,9 +282,9 @@ func convertToRedisTopicScheme(topic string) string {
 }
 
 func convertFromRedisTopicScheme(topic string) string {
-	// RedisStreams uses "." for separator and "*" for wild cards.
+	// Redis Pub/Sub uses "." for separator and "*" for wild cards.
 	// Since we have standardized on the MQTT style scheme or "/" & "#" we need to
-	// convert it from the RedisStreams scheme.
+	// convert it from the Redis Pub/Sub scheme.
 	topic = strings.Replace(topic, RedisTopicSeparator, StandardTopicSeparator, -1)
 	topic = strings.Replace(topic, RedisWildcard, StandardWildcard, -1)
 

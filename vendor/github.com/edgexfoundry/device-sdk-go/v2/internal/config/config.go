@@ -1,6 +1,6 @@
 // -*- Mode: Go; indent-tabs-mode: t -*-
 //
-// Copyright (C) 2020-2021 IOTech Ltd
+// Copyright (C) 2020-2022 IOTech Ltd
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -28,6 +28,8 @@ type ConfigurationStruct struct {
 	SecretStore bootstrapConfig.SecretStoreInfo
 	// MessageQueue contains information for connecting to MessageBus which provides alternative way to publish event
 	MessageQueue bootstrapConfig.MessageBusInfo
+	// MaxEventSize is the maximum event size that can be sent to MessageBus or CoreData
+	MaxEventSize int64
 }
 
 // UpdateFromRaw converts configuration received from the registry to a service-specific configuration struct which is
@@ -66,10 +68,11 @@ func (c *ConfigurationStruct) UpdateWritableFromRaw(rawWritable interface{}) boo
 // into an bootstrapConfig.BootstrapConfiguration struct contained within ConfigurationStruct).
 func (c *ConfigurationStruct) GetBootstrap() bootstrapConfig.BootstrapConfiguration {
 	return bootstrapConfig.BootstrapConfiguration{
-		Clients:     c.Clients,
-		Service:     c.Service,
-		Registry:    c.Registry,
-		SecretStore: c.SecretStore,
+		Clients:      c.Clients,
+		Service:      c.Service,
+		Registry:     c.Registry,
+		SecretStore:  c.SecretStore,
+		MessageQueue: c.MessageQueue,
 	}
 }
 
@@ -91,4 +94,9 @@ func (c *ConfigurationStruct) GetInsecureSecrets() bootstrapConfig.InsecureSecre
 // GetMessageBusInfo returns the MessageBus configuration
 func (c *ConfigurationStruct) GetMessageBusInfo() bootstrapConfig.MessageBusInfo {
 	return c.MessageQueue
+}
+
+// GetTelemetryInfo returns the service's Telemetry settings.
+func (c *ConfigurationStruct) GetTelemetryInfo() *bootstrapConfig.TelemetryInfo {
+	return &c.Writable.Telemetry
 }

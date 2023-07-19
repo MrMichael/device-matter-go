@@ -1,6 +1,6 @@
 // -*- Mode: Go; indent-tabs-mode: t -*-
 //
-// Copyright (C) 2020-2021 IOTech Ltd
+// Copyright (C) 2020-2022 IOTech Ltd
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -10,6 +10,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/edgexfoundry/device-sdk-go/v2/internal/common"
 	"github.com/edgexfoundry/go-mod-bootstrap/v2/bootstrap/startup"
 	"github.com/edgexfoundry/go-mod-bootstrap/v2/di"
 	"github.com/gorilla/mux"
@@ -33,6 +34,7 @@ func NewBootstrap(router *mux.Router) *Bootstrap {
 
 func (b *Bootstrap) BootstrapHandler(ctx context.Context, wg *sync.WaitGroup, startupTimer startup.Timer, dic *di.Container) (success bool) {
 	ds.UpdateFromContainer(b.router, dic)
+	ds.selfAssign()
 	ds.ctx = ctx
 	ds.wg = wg
 	ds.controller.InitRestRoutes()
@@ -78,6 +80,10 @@ func (b *Bootstrap) BootstrapHandler(ctx context.Context, wg *sync.WaitGroup, st
 	}
 
 	ds.manager.StartAutoEvents()
+
+	// Very important that this handler is called after the NewServiceMetrics handler so
+	// MetricsManager dependency has been created.
+	common.InitializeSentMetrics(ds.LoggingClient, dic)
 
 	return true
 }

@@ -6,33 +6,32 @@
 package dtos
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/common"
-	"github.com/edgexfoundry/go-mod-core-contracts/v2/errors"
+	edgexErrors "github.com/edgexfoundry/go-mod-core-contracts/v2/errors"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/models"
 )
 
 // DeviceProfile and its properties are defined in the APIv2 specification:
 // https://app.swaggerhub.com/apis-docs/EdgeXFoundry1/core-metadata/2.1.0#/DeviceProfile
 type DeviceProfile struct {
-	DBTimestamp     `json:",inline"`
-	Id              string           `json:"id" validate:"omitempty,uuid"`
-	Name            string           `json:"name" yaml:"name" validate:"required,edgex-dto-none-empty-string,edgex-dto-rfc3986-unreserved-chars"`
-	Manufacturer    string           `json:"manufacturer" yaml:"manufacturer"`
-	Description     string           `json:"description" yaml:"description"`
-	Model           string           `json:"model" yaml:"model"`
-	Labels          []string         `json:"labels" yaml:"labels,flow"`
-	DeviceResources []DeviceResource `json:"deviceResources" yaml:"deviceResources" validate:"required,gt=0,dive"`
-	DeviceCommands  []DeviceCommand  `json:"deviceCommands" yaml:"deviceCommands" validate:"dive"`
+	DBTimestamp            `json:",inline"`
+	DeviceProfileBasicInfo `json:",inline" yaml:",inline"`
+	DeviceResources        []DeviceResource `json:"deviceResources" yaml:"deviceResources" validate:"dive"`
+	DeviceCommands         []DeviceCommand  `json:"deviceCommands" yaml:"deviceCommands" validate:"dive"`
 }
 
 // Validate satisfies the Validator interface
 func (dp *DeviceProfile) Validate() error {
 	err := common.Validate(dp)
 	if err != nil {
-		return errors.NewCommonEdgeX(errors.KindContractInvalid, "invalid DeviceProfile.", err)
+		// The DeviceProfileBasicInfo is the internal struct in Golang programming, not in the Profile model,
+		// so it should be hidden from the error messages.
+		err = errors.New(strings.ReplaceAll(err.Error(), ".DeviceProfileBasicInfo", ""))
+		return edgexErrors.NewCommonEdgeX(edgexErrors.KindContractInvalid, "Invalid DeviceProfile.", err)
 	}
 	return ValidateDeviceProfileDTO(*dp)
 }
@@ -41,29 +40,24 @@ func (dp *DeviceProfile) Validate() error {
 func (dp *DeviceProfile) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var alias struct {
 		DBTimestamp
-		Id              string           `yaml:"id"`
-		Name            string           `yaml:"name"`
-		Manufacturer    string           `yaml:"manufacturer"`
-		Description     string           `yaml:"description"`
-		Model           string           `yaml:"model"`
-		Labels          []string         `yaml:"labels"`
-		DeviceResources []DeviceResource `yaml:"deviceResources"`
-		DeviceCommands  []DeviceCommand  `yaml:"deviceCommands"`
+		DeviceProfileBasicInfo `yaml:",inline"`
+		DeviceResources        []DeviceResource `yaml:"deviceResources"`
+		DeviceCommands         []DeviceCommand  `yaml:"deviceCommands"`
 	}
 	if err := unmarshal(&alias); err != nil {
-		return errors.NewCommonEdgeX(errors.KindContractInvalid, "failed to unmarshal request body as YAML.", err)
+		return edgexErrors.NewCommonEdgeX(edgexErrors.KindContractInvalid, "failed to unmarshal request body as YAML.", err)
 	}
 	*dp = DeviceProfile(alias)
 
 	if err := dp.Validate(); err != nil {
-		return errors.NewCommonEdgeXWrapper(err)
+		return edgexErrors.NewCommonEdgeXWrapper(err)
 	}
 
 	// Normalize resource's value type
 	for i, resource := range dp.DeviceResources {
 		valueType, err := common.NormalizeValueType(resource.Properties.ValueType)
 		if err != nil {
-			return errors.NewCommonEdgeXWrapper(err)
+			return edgexErrors.NewCommonEdgeXWrapper(err)
 		}
 		dp.DeviceResources[i].Properties.ValueType = valueType
 	}
@@ -88,13 +82,15 @@ func ToDeviceProfileModel(deviceProfileDTO DeviceProfile) models.DeviceProfile {
 // FromDeviceProfileModelToDTO transforms the DeviceProfile Model to the DeviceProfile DTO
 func FromDeviceProfileModelToDTO(deviceProfile models.DeviceProfile) DeviceProfile {
 	return DeviceProfile{
-		DBTimestamp:     DBTimestamp(deviceProfile.DBTimestamp),
-		Id:              deviceProfile.Id,
-		Name:            deviceProfile.Name,
-		Description:     deviceProfile.Description,
-		Manufacturer:    deviceProfile.Manufacturer,
-		Model:           deviceProfile.Model,
-		Labels:          deviceProfile.Labels,
+		DBTimestamp: DBTimestamp(deviceProfile.DBTimestamp),
+		DeviceProfileBasicInfo: DeviceProfileBasicInfo{
+			Id:           deviceProfile.Id,
+			Name:         deviceProfile.Name,
+			Description:  deviceProfile.Description,
+			Manufacturer: deviceProfile.Manufacturer,
+			Model:        deviceProfile.Model,
+			Labels:       deviceProfile.Labels,
+		},
 		DeviceResources: FromDeviceResourceModelsToDTOs(deviceProfile.DeviceResources),
 		DeviceCommands:  FromDeviceCommandModelsToDTOs(deviceProfile.DeviceCommands),
 	}
@@ -106,11 +102,11 @@ func ValidateDeviceProfileDTO(profile DeviceProfile) error {
 	for _, resource := range profile.DeviceResources {
 		if resource.Properties.ValueType == common.ValueTypeBinary &&
 			strings.Contains(resource.Properties.ReadWrite, common.ReadWrite_W) {
-			return errors.NewCommonEdgeX(errors.KindContractInvalid, fmt.Sprintf("write permission not support %s value type for resource '%s'", common.ValueTypeBinary, resource.Name), nil)
+			return edgexErrors.NewCommonEdgeX(edgexErrors.KindContractInvalid, fmt.Sprintf("write permission not support %s value type for resource '%s'", common.ValueTypeBinary, resource.Name), nil)
 		}
 		// deviceResource name should not duplicated
 		if dupCheck[resource.Name] {
-			return errors.NewCommonEdgeX(errors.KindContractInvalid, fmt.Sprintf("device resource %s is duplicated", resource.Name), nil)
+			return edgexErrors.NewCommonEdgeX(edgexErrors.KindContractInvalid, fmt.Sprintf("device resource %s is duplicated", resource.Name), nil)
 		}
 		dupCheck[resource.Name] = true
 	}
@@ -119,7 +115,7 @@ func ValidateDeviceProfileDTO(profile DeviceProfile) error {
 	for _, command := range profile.DeviceCommands {
 		// deviceCommand name should not duplicated
 		if dupCheck[command.Name] {
-			return errors.NewCommonEdgeX(errors.KindContractInvalid, fmt.Sprintf("device command %s is duplicated", command.Name), nil)
+			return edgexErrors.NewCommonEdgeX(edgexErrors.KindContractInvalid, fmt.Sprintf("device command %s is duplicated", command.Name), nil)
 		}
 		dupCheck[command.Name] = true
 
@@ -127,11 +123,11 @@ func ValidateDeviceProfileDTO(profile DeviceProfile) error {
 		for _, ro := range resourceOperations {
 			// ResourceOperations referenced in deviceCommands must exist
 			if !deviceResourcesContains(profile.DeviceResources, ro.DeviceResource) {
-				return errors.NewCommonEdgeX(errors.KindContractInvalid, fmt.Sprintf("device command's resource %s doesn't match any device resource", ro.DeviceResource), nil)
+				return edgexErrors.NewCommonEdgeX(edgexErrors.KindContractInvalid, fmt.Sprintf("device command's resource %s doesn't match any device resource", ro.DeviceResource), nil)
 			}
 			// Check the ReadWrite whether is align to the deviceResource
 			if !validReadWritePermission(profile.DeviceResources, ro.DeviceResource, command.ReadWrite) {
-				return errors.NewCommonEdgeX(errors.KindContractInvalid, fmt.Sprintf("device command's ReadWrite permission '%s' doesn't align the device resource", command.ReadWrite), nil)
+				return edgexErrors.NewCommonEdgeX(edgexErrors.KindContractInvalid, fmt.Sprintf("device command's ReadWrite permission '%s' doesn't align the device resource", command.ReadWrite), nil)
 			}
 		}
 	}
@@ -153,7 +149,7 @@ func validReadWritePermission(resources []DeviceResource, name string, readWrite
 	valid := true
 	for _, resource := range resources {
 		if resource.Name == name {
-			if resource.Properties.ReadWrite != common.ReadWrite_RW &&
+			if resource.Properties.ReadWrite != common.ReadWrite_RW && resource.Properties.ReadWrite != common.ReadWrite_WR &&
 				resource.Properties.ReadWrite != readWrite {
 				valid = false
 				break

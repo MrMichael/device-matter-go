@@ -10,15 +10,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/edgexfoundry/device-sdk-go/v2/internal/cache"
+	"github.com/edgexfoundry/device-sdk-go/v2/internal/container"
+	"github.com/edgexfoundry/device-sdk-go/v2/pkg/models"
+
 	bootstrapContainer "github.com/edgexfoundry/go-mod-bootstrap/v2/bootstrap/container"
 	"github.com/edgexfoundry/go-mod-bootstrap/v2/di"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/common"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/errors"
-
-	"github.com/edgexfoundry/device-sdk-go/v2/internal/cache"
-	"github.com/edgexfoundry/device-sdk-go/v2/internal/container"
-	"github.com/edgexfoundry/device-sdk-go/v2/pkg/models"
 )
 
 var (
@@ -83,7 +83,7 @@ func CommandValuesToEventDTO(cvs []*models.CommandValue, deviceName string, sour
 		}
 
 		// assertion
-		dc := bootstrapContainer.MetadataDeviceClientFrom(dic.Get)
+		dc := bootstrapContainer.DeviceClientFrom(dic.Get)
 		err := checkAssertion(cv, dr.Properties.Assertion, device.Name, lc, dc)
 		if err != nil {
 			return nil, errors.NewCommonEdgeXWrapper(err)
@@ -108,6 +108,10 @@ func CommandValuesToEventDTO(cvs []*models.CommandValue, deviceName string, sour
 		reading, err := commandValueToReading(cv, device.Name, device.ProfileName, dr.Properties.MediaType, origin)
 		if err != nil {
 			return nil, errors.NewCommonEdgeXWrapper(err)
+		}
+		// ReadingUnits=true to include units in the reading
+		if config.Writable.Reading.ReadingUnits {
+			reading.Units = dr.Properties.Units
 		}
 		readings = append(readings, reading)
 

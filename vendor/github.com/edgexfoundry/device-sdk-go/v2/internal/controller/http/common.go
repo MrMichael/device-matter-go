@@ -12,11 +12,13 @@ import (
 	"strings"
 
 	bootstrapContainer "github.com/edgexfoundry/go-mod-bootstrap/v2/bootstrap/container"
+	"github.com/edgexfoundry/go-mod-bootstrap/v2/bootstrap/interfaces"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/common"
 	commonDTO "github.com/edgexfoundry/go-mod-core-contracts/v2/dtos/common"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/errors"
 
 	sdkCommon "github.com/edgexfoundry/device-sdk-go/v2/internal/common"
+	"github.com/edgexfoundry/device-sdk-go/v2/internal/config"
 	"github.com/edgexfoundry/device-sdk-go/v2/internal/container"
 	"github.com/edgexfoundry/device-sdk-go/v2/internal/telemetry"
 )
@@ -24,21 +26,38 @@ import (
 // Ping handles the request to /ping endpoint. Is used to test if the service is working
 // It returns a response as specified by the V2 API swagger in openapi/common
 func (c *RestController) Ping(writer http.ResponseWriter, request *http.Request) {
-	response := commonDTO.NewPingResponse()
+	response := commonDTO.NewPingResponse(c.serviceName)
 	c.sendResponse(writer, request, common.ApiPingRoute, response, http.StatusOK)
 }
 
 // Version handles the request to /version endpoint. Is used to request the service's versions
 // It returns a response as specified by the V2 API swagger in openapi/common
 func (c *RestController) Version(writer http.ResponseWriter, request *http.Request) {
-	response := commonDTO.NewVersionSdkResponse(sdkCommon.ServiceVersion, sdkCommon.SDKVersion)
+	response := commonDTO.NewVersionSdkResponse(sdkCommon.ServiceVersion, sdkCommon.SDKVersion, c.serviceName)
 	c.sendResponse(writer, request, common.ApiVersionRoute, response, http.StatusOK)
 }
 
 // Config handles the request to /config endpoint. Is used to request the service's configuration
 // It returns a response as specified by the V2 API swagger in openapi/common
 func (c *RestController) Config(writer http.ResponseWriter, request *http.Request) {
-	response := commonDTO.NewConfigResponse(container.ConfigurationFrom(c.dic.Get))
+	var fullConfig interface{}
+	configuration := container.ConfigurationFrom(c.dic.Get)
+
+	if c.customConfig == nil {
+		// case of no custom configs
+		fullConfig = *configuration
+	} else {
+		// create a struct combining the common configuration and custom configuration sections
+		fullConfig = struct {
+			config.ConfigurationStruct
+			CustomConfiguration interfaces.UpdatableConfig
+		}{
+			*configuration,
+			c.customConfig,
+		}
+	}
+
+	response := commonDTO.NewConfigResponse(fullConfig, c.serviceName)
 	c.sendResponse(writer, request, common.ApiVersionRoute, response, http.StatusOK)
 }
 
@@ -56,7 +75,7 @@ func (c *RestController) Metrics(writer http.ResponseWriter, request *http.Reque
 		CpuBusyAvg:     uint8(telem.CpuBusyAvg),
 	}
 
-	response := commonDTO.NewMetricsResponse(metrics)
+	response := commonDTO.NewMetricsResponse(metrics, c.serviceName)
 	c.sendResponse(writer, request, common.ApiMetricsRoute, response, http.StatusOK)
 }
 

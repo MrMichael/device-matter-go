@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2020-2021 IOTech Ltd
+// Copyright (C) 2020-2022 IOTech Ltd
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -30,7 +30,16 @@ func NewDeviceServiceCallbackClient(baseUrl string) interfaces.DeviceServiceCall
 
 func (client *deviceServiceCallbackClient) AddDeviceCallback(ctx context.Context, request requests.AddDeviceRequest) (dtoCommon.BaseResponse, errors.EdgeX) {
 	var response dtoCommon.BaseResponse
-	err := utils.PostRequestWithRawData(ctx, &response, client.baseUrl+common.ApiDeviceCallbackRoute, request)
+	err := utils.PostRequestWithRawData(ctx, &response, client.baseUrl, common.ApiDeviceCallbackRoute, nil, request)
+	if err != nil {
+		return response, errors.NewCommonEdgeXWrapper(err)
+	}
+	return response, nil
+}
+
+func (client *deviceServiceCallbackClient) ValidateDeviceCallback(ctx context.Context, request requests.AddDeviceRequest) (dtoCommon.BaseResponse, errors.EdgeX) {
+	var response dtoCommon.BaseResponse
+	err := utils.PostRequestWithRawData(ctx, &response, client.baseUrl, common.ApiDeviceValidationRoute, nil, request)
 	if err != nil {
 		return response, errors.NewCommonEdgeXWrapper(err)
 	}
@@ -39,7 +48,7 @@ func (client *deviceServiceCallbackClient) AddDeviceCallback(ctx context.Context
 
 func (client *deviceServiceCallbackClient) UpdateDeviceCallback(ctx context.Context, request requests.UpdateDeviceRequest) (dtoCommon.BaseResponse, errors.EdgeX) {
 	var response dtoCommon.BaseResponse
-	err := utils.PutRequest(ctx, &response, client.baseUrl+common.ApiDeviceCallbackRoute, request)
+	err := utils.PutRequest(ctx, &response, client.baseUrl, common.ApiDeviceCallbackRoute, nil, request)
 	if err != nil {
 		return response, errors.NewCommonEdgeXWrapper(err)
 	}
@@ -58,7 +67,7 @@ func (client *deviceServiceCallbackClient) DeleteDeviceCallback(ctx context.Cont
 
 func (client *deviceServiceCallbackClient) UpdateDeviceProfileCallback(ctx context.Context, request requests.DeviceProfileRequest) (dtoCommon.BaseResponse, errors.EdgeX) {
 	var response dtoCommon.BaseResponse
-	err := utils.PutRequest(ctx, &response, client.baseUrl+common.ApiProfileCallbackRoute, request)
+	err := utils.PutRequest(ctx, &response, client.baseUrl, common.ApiProfileCallbackRoute, nil, request)
 	if err != nil {
 		return response, errors.NewCommonEdgeXWrapper(err)
 	}
@@ -67,7 +76,7 @@ func (client *deviceServiceCallbackClient) UpdateDeviceProfileCallback(ctx conte
 
 func (client *deviceServiceCallbackClient) AddProvisionWatcherCallback(ctx context.Context, request requests.AddProvisionWatcherRequest) (dtoCommon.BaseResponse, errors.EdgeX) {
 	var response dtoCommon.BaseResponse
-	err := utils.PostRequestWithRawData(ctx, &response, client.baseUrl+common.ApiWatcherCallbackRoute, request)
+	err := utils.PostRequestWithRawData(ctx, &response, client.baseUrl, common.ApiWatcherCallbackRoute, nil, request)
 	if err != nil {
 		return response, errors.NewCommonEdgeXWrapper(err)
 	}
@@ -76,7 +85,7 @@ func (client *deviceServiceCallbackClient) AddProvisionWatcherCallback(ctx conte
 
 func (client *deviceServiceCallbackClient) UpdateProvisionWatcherCallback(ctx context.Context, request requests.UpdateProvisionWatcherRequest) (dtoCommon.BaseResponse, errors.EdgeX) {
 	var response dtoCommon.BaseResponse
-	err := utils.PutRequest(ctx, &response, client.baseUrl+common.ApiWatcherCallbackRoute, request)
+	err := utils.PutRequest(ctx, &response, client.baseUrl, common.ApiWatcherCallbackRoute, nil, request)
 	if err != nil {
 		return response, errors.NewCommonEdgeXWrapper(err)
 	}
@@ -95,7 +104,7 @@ func (client *deviceServiceCallbackClient) DeleteProvisionWatcherCallback(ctx co
 
 func (client *deviceServiceCallbackClient) UpdateDeviceServiceCallback(ctx context.Context, request requests.UpdateDeviceServiceRequest) (dtoCommon.BaseResponse, errors.EdgeX) {
 	var response dtoCommon.BaseResponse
-	err := utils.PutRequest(ctx, &response, client.baseUrl+common.ApiServiceCallbackRoute, request)
+	err := utils.PutRequest(ctx, &response, client.baseUrl, common.ApiServiceCallbackRoute, nil, request)
 	if err != nil {
 		return response, errors.NewCommonEdgeXWrapper(err)
 	}
