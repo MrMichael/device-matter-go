@@ -46,7 +46,7 @@ github.com/edgexfoundry/go-mod-bootstrap/v2/di
 github.com/edgexfoundry/go-mod-configuration/v2/configuration
 github.com/edgexfoundry/go-mod-configuration/v2/internal/pkg/consul
 github.com/edgexfoundry/go-mod-configuration/v2/pkg/types
-# github.com/edgexfoundry/go-mod-core-contracts/v2 v2.1.1
+# github.com/edgexfoundry/go-mod-core-contracts/v2 v2.3.0
 ## explicit
 github.com/edgexfoundry/go-mod-core-contracts/v2/clients/http
 github.com/edgexfoundry/go-mod-core-contracts/v2/clients/http/utils
@@ -79,18 +79,18 @@ github.com/edgexfoundry/go-mod-secrets/v2/pkg/types
 github.com/edgexfoundry/go-mod-secrets/v2/secrets
 # github.com/fatih/color v1.9.0
 github.com/fatih/color
-# github.com/fxamacker/cbor/v2 v2.3.0
+# github.com/fxamacker/cbor/v2 v2.4.0
 github.com/fxamacker/cbor/v2
-# github.com/go-kit/kit v0.11.0
-github.com/go-kit/kit/log
-# github.com/go-logfmt/logfmt v0.5.0
+# github.com/go-kit/log v0.2.1
+github.com/go-kit/log
+# github.com/go-logfmt/logfmt v0.5.1
 github.com/go-logfmt/logfmt
 # github.com/go-playground/locales v0.14.0
 github.com/go-playground/locales
 github.com/go-playground/locales/currency
 # github.com/go-playground/universal-translator v0.18.0
 github.com/go-playground/universal-translator
-# github.com/go-playground/validator/v10 v10.9.0
+# github.com/go-playground/validator/v10 v10.11.1
 github.com/go-playground/validator/v10
 # github.com/go-redis/redis/v7 v7.3.0
 github.com/go-redis/redis/v7
@@ -146,19 +146,19 @@ github.com/pebbe/zmq4
 github.com/pelletier/go-toml
 # github.com/x448/float16 v0.8.4
 github.com/x448/float16
-# golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97
+# golang.org/x/crypto v0.0.0-20211215153901-e495a2d5b3d3
 golang.org/x/crypto/sha3
-# golang.org/x/net v0.0.0-20210405180319-a5a99cb37ef4
+# golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2
 golang.org/x/net/internal/socks
 golang.org/x/net/proxy
-# golang.org/x/sys v0.0.0-20210806184541-e5e7981a1069
+# golang.org/x/sys v0.0.0-20210917161153-d61c044b1678
 golang.org/x/sys/cpu
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
-# golang.org/x/text v0.3.6
+# golang.org/x/text v0.3.7
 golang.org/x/text/internal/language
 golang.org/x/text/internal/language/compact
 golang.org/x/text/internal/tag
 golang.org/x/text/language
-# gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
+# gopkg.in/yaml.v3 v3.0.1
 gopkg.in/yaml.v3
